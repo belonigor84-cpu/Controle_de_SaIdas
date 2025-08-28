@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de Saídas - Sincronizado</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @media print {
+            body { margin: 0; padding: 0; }
+            .no-print { display: none !important; }
+            .page-break { page-break-after: always; }
+        }
+        .table-container::-webkit-scrollbar { width: 8px; height: 8px; }
+        .table-container::-webkit-scrollbar-track { background: #f1f1f1; }
+        .table-container::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+        .table-container::-webkit-scrollbar-thumb:hover { background: #555; }
+        body.dark-mode { background-color: #121212; color: #e0e0e0; }
+        body.dark-mode .bg-white { background-color: #1e1e1e; }
+        body.dark-mode .bg-gray-100 { background-color: #2e2e2e; }
+        body.dark-mode .text-gray-800 { color: #f5f5f5; }
+        body.dark-mode .text-gray-700 { color: #e0e0e0; }
+        body.dark-mode .text-gray-500 { color: #b0b0b0; }
+        body.dark-mode .text-gray-600 { color: #9e9e9e; }
+        body.dark-mode .divide-gray-200 { border-color: #444; }
+        body.dark-mode .border-gray-300 { border-color: #444; }
+        body.dark-mode .hover\:bg-gray-50:hover { background-color: #2a2a2a; }
+        body.dark-mode input { background-color: #2e2e2e; color: #e0e0e0; border-color: #555; }
+        input:disabled { cursor: not-allowed; background-color: #e5e7eb; color: #6b7280; }
+        body.dark-mode input:disabled { background-color: #3d3d3d; color: #a0a0a0; }
+        .professor-control { display: none !important; }
+        body.professor-mode .professor-control { display: flex !important; }
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex; justify-content: center; align-items: center; z-index: 100;
+            transition: opacity 0.3s ease-in-out; opacity: 0; pointer-events: none;
+        }
+        .modal-overlay.open { opacity: 1; pointer-events: auto; }
+        .modal-content {
+            background-color: white; padding: 2rem; border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); width: 90%; max-width: 400px;
+            transform: translateY(-20px); transition: transform 0.3s ease-in-out;
+        }
+        .modal-overlay.open .modal-content { transform: translateY(0); }
+        body.dark-mode .modal-content { background-color: #1e1e1e; }
+    </style>
+</head>
+<body class="bg-gray-50 p-4 md:p-8">
+    <div class="max-w-4xl mx-auto">
+        <div class="no-print mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <h1 class="text-2xl font-bold text-gray-800">Controle de Saídas - Sincronizado</h1>
+            <div class="flex flex-wrap gap-2">
+                <button id="professorModeToggle" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md flex items-center gap-2 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M10 9a3 3 0 100-6 3 3 0 000 6zM9.548 10.452a5.986 5.986 0 013.902 0c2.453-.393 4.296-.282 5.347.164.215.09.432.186.649.288l.056.028a.5.5 0 01.353.454v2.793a1 1 0 01-1 1h-16a1 1 0 01-1-1v-2.793a.5.5 0 01.353-.454l.056-.028c1.157-.59 3.018-.76 5.347-.164z" />
+                    </svg>
+                    Modo Professor
+                </button>
+                <button id="darkModeToggle" class="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded-md flex items-center gap-2 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M17.293 13.914A10.004 10.004 0 0014.246 5.86a10.004 10.004 0 00-8.914 9.428A1 1 0 014.167 16h-.142a1 1 0 00-1 1 1 1 0 001 1h.142A10.004 10.004 0 0017.293 13.914z" />
+                    </svg>
+                    Modo Noturno
+                </button>
+                <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center gap-2 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd" />
+                    </svg>
+                    Imprimir
+                </button>
+                <button id="add-row-btn" onclick="addNewRow()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md professor-control items-center gap-2 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                    </svg>
+                    Adicionar Linha
+                </button>
+                <button id="clear-table-btn" onclick="clearTable()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md professor-control flex items-center gap-2 transition-colors">
+                    Limpar Tabela
+                </button>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+            <div class="table-container overflow-x-auto max-h-[70vh]">
+                <table class="min-w-full divide-y divide-gray-200 border border-gray-300">
+                    <thead class="bg-gray-100 sticky top-0">
+                        <tr>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-300 w-12 text-center">Nº</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-300">Nome do Aluno</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-300 w-24 text-center">Cronômetro</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Observações</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider professor-control w-20 text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200" id="namesTableBody">
+                        <!-- As linhas serão adicionadas aqui pelo JavaScript, em tempo real -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="no-print mt-4 text-sm text-gray-600">
+            <p>Total de registros: <span id="totalRecords">0</span></p>
+            <p id="userIdDisplay" class="mt-2 text-xs">Aguardando autenticação...</p>
+        </div>
+    </div>
+
+    <!-- Modal de Senha -->
+    <div id="passwordModal" class="modal-overlay">
+        <div class="modal-content text-center">
+            <h3 class="text-xl font-semibold mb-4 text-gray-800">Acesso Professor</h3>
+            <p class="text-gray-600 mb-4">Digite a senha para habilitar o modo professor.</p>
+            <input type="password" id="passwordInput" class="w-full px-4 py-2 mb-4 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="Senha">
+            <div class="flex justify-end gap-2">
+                <button id="cancelBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md transition-colors">
+                    Cancelar
+                </button>
+                <button id="enterBtn" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md transition-colors">
+                    Entrar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <audio id="alarmSound" preload="auto">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-alarm-digital-clock-beep-989.mp3" type="audio/mpeg">
+    </audio>
+
+    <script type="module">
+        // Importa as funções necessárias do Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, query, addDoc, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Variáveis globais de ambiente (fornecidas pelo sistema Canvas)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Inicializa o Firebase e o Firestore
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        
+        let userId = null;
+        const userCollectionRef = collection(db, `artifacts/${appId}/public/data/saidas`);
+        const timerIntervals = {}; // Armazena os IDs dos setIntervals para cada cronômetro
+
+        // Lógica de Autenticação
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+                document.getElementById('userIdDisplay').textContent = `Seu ID: ${userId}`;
+                console.log("Usuário autenticado:", userId);
+                await startRealtimeListener();
+            } else {
+                console.log("Nenhum usuário logado. Tentando autenticação anônima ou com token.");
+                if (initialAuthToken) {
+                    try {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                        console.log("Autenticação com token customizado bem-sucedida.");
+                    } catch (error) {
+                        console.error("Erro ao autenticar com token customizado:", error);
+                        await signInAnonymously(auth);
+                    }
+                } else {
+                    await signInAnonymously(auth);
+                }
+            }
+        });
+
+        // Lógica de Sincronização em Tempo Real com Firestore
+        async function startRealtimeListener() {
+            try {
+                // Remove todos os listeners e cronômetros antigos
+                Object.values(timerIntervals).forEach(clearInterval);
+                for (const row of document.getElementById('namesTableBody').children) {
+                    const timerButton = row.querySelector('.timer-button');
+                    if (timerButton && timerButton.dataset.timerId) {
+                        clearInterval(timerButton.dataset.timerId);
+                    }
+                }
+                document.getElementById('namesTableBody').innerHTML = ''; // Limpa a tabela
+
+                const q = collection(db, `artifacts/${appId}/public/data/saidas`);
+                
+                // onSnapshot cria um "ouvinte" que é acionado sempre que a coleção é alterada
+                onSnapshot(q, (querySnapshot) => {
+                    const rowsData = {};
+                    querySnapshot.forEach((doc) => {
+                        rowsData[doc.id] = { id: doc.id, ...doc.data() };
+                    });
+
+                    // Atualiza a tabela com os novos dados
+                    renderTable(rowsData);
+                    updateTotalRecords();
+                });
+            } catch (e) {
+                console.error("Erro ao configurar o listener em tempo real:", e);
+            }
+        }
+        
+        // Renderiza a tabela com os dados do Firestore
+        function renderTable(data) {
+            const tableBody = document.getElementById('namesTableBody');
+            const currentIds = new Set(Object.keys(data));
+            const existingRows = Array.from(tableBody.children);
+            
+            // Remove linhas que não existem mais no banco de dados
+            existingRows.forEach(row => {
+                const docId = row.dataset.docId;
+                if (!currentIds.has(docId)) {
+                    // Limpa o cronômetro antes de remover a linha
+                    const timerButton = row.querySelector('.timer-button');
+                    if (timerButton && timerButton.dataset.timerId) {
+                        clearInterval(timerButton.dataset.timerId);
+                    }
+                    row.remove();
+                }
+            });
+
+            // Adiciona ou atualiza as linhas
+            const sortedData = Object.values(data).sort((a, b) => a.rowNumber - b.rowNumber);
+            sortedData.forEach(rowData => {
+                let row = document.querySelector(`[data-doc-id="${rowData.id}"]`);
+                if (!row) {
+                    row = createRow(rowData);
+                    tableBody.appendChild(row);
+                }
+                updateRow(row, rowData);
+            });
+        }
+        
+        // Cria uma nova linha HTML com os dados
+        function createRow(rowData) {
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-gray-50';
+            row.dataset.docId = rowData.id;
+            
+            const numberCell = document.createElement('td');
+            numberCell.className = 'px-4 py-3 whitespace-nowrap text-sm text-gray-500 border-r border-gray-300 text-center';
+            numberCell.textContent = rowData.rowNumber;
+            
+            const nameCell = document.createElement('td');
+            nameCell.className = 'px-4 py-3 whitespace-nowrap border-r border-gray-300';
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.className = 'w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500';
+            nameInput.placeholder = 'Nome do Aluno';
+            nameInput.value = rowData.name || '';
+            nameInput.disabled = true; // Desabilitado por padrão
+            nameCell.appendChild(nameInput);
+            nameInput.addEventListener('input', (e) => saveRowData(rowData.id, { name: e.target.value }));
+
+            const timerCell = document.createElement('td');
+            timerCell.className = 'px-4 py-3 whitespace-nowrap border-r border-gray-300 text-center';
+            const timerButton = document.createElement('button');
+            timerButton.className = 'bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm timer-button';
+            timerButton.onclick = function() { startTimer(this, rowData.id); };
+            timerCell.appendChild(timerButton);
+            
+            const notesCell = document.createElement('td');
+            notesCell.className = 'px-4 py-3 whitespace-nowrap';
+            const notesInput = document.createElement('input');
+            notesInput.type = 'text';
+            notesInput.className = 'w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500';
+            notesInput.placeholder = 'Observações (opcional)';
+            notesInput.value = rowData.notes || '';
+            notesInput.disabled = true; // Desabilitado por padrão
+            notesCell.appendChild(notesInput);
+            notesInput.addEventListener('input', (e) => saveRowData(rowData.id, { notes: e.target.value }));
+            
+            const actionsCell = document.createElement('td');
+            actionsCell.className = 'px-4 py-3 whitespace-nowrap text-sm font-medium professor-control text-center';
+            const deleteButton = document.createElement('button');
+            deleteButton.className = 'text-red-600 hover:text-red-900';
+            deleteButton.textContent = 'Deletar';
+            deleteButton.onclick = () => deleteRow(rowData.id);
+            actionsCell.appendChild(deleteButton);
+            
+            row.appendChild(numberCell);
+            row.appendChild(nameCell);
+            row.appendChild(timerCell);
+            row.appendChild(notesCell);
+            row.appendChild(actionsCell);
+            
+            return row;
+        }
+
+        // Atualiza uma linha HTML existente com os novos dados
+        function updateRow(row, rowData) {
+            const timerButton = row.querySelector('.timer-button');
+            const nameInput = row.querySelector('input[placeholder="Nome do Aluno"]');
+            const notesInput = row.querySelector('input[placeholder="Observações (opcional)"]');
+
+            if (nameInput.value !== rowData.name) {
+                nameInput.value = rowData.name || '';
+            }
+            if (notesInput.value !== rowData.notes) {
+                notesInput.value = rowData.notes || '';
+            }
+            
+            // Lógica para o cronômetro
+            const newFormattedTime = 
+                (rowData.minutes < 10 ? '0' + rowData.minutes : rowData.minutes) + ':' + 
+                (rowData.seconds < 10 ? '0' + rowData.seconds : rowData.seconds);
+            
+            timerButton.textContent = newFormattedTime;
+            
+            if (rowData.running && !timerButton.dataset.timerId) {
+                // Inicia o cronômetro localmente se o banco de dados disser que está rodando
+                timerButton.dataset.seconds = rowData.seconds;
+                timerButton.dataset.minutes = rowData.minutes;
+                timerButton.dataset.running = 'false'; // Evita o loop de startTimer
+                startTimer(timerButton, rowData.id);
+            } else if (!rowData.running && timerButton.dataset.timerId) {
+                // Pausa o cronômetro localmente se o banco de dados disser que está parado
+                clearInterval(timerButton.dataset.timerId);
+                delete timerButton.dataset.timerId;
+                timerButton.classList.remove('bg-red-500');
+                timerButton.classList.add('bg-blue-500');
+            }
+        }
+        
+        // Função para salvar dados no Firestore
+        async function saveRowData(docId, data) {
+            try {
+                await setDoc(doc(db, `artifacts/${appId}/public/data/saidas`, docId), data, { merge: true });
+            } catch (e) {
+                console.error("Erro ao salvar dados no Firestore:", e);
+            }
+        }
+
+        // Adiciona uma nova linha com um documento no Firestore
+        async function addNewRow() {
+            try {
+                const newDocRef = await addDoc(userCollectionRef, {
+                    name: '',
+                    notes: '',
+                    minutes: 0,
+                    seconds: 0,
+                    running: false,
+                    rowNumber: (await getDocs(userCollectionRef)).size + 1
+                });
+                console.log("Novo documento adicionado com ID:", newDocRef.id);
+            } catch (e) {
+                console.error("Erro ao adicionar nova linha:", e);
+            }
+        }
+        
+        // Deleta uma linha do Firestore
+        async function deleteRow(docId) {
+            try {
+                const docRef = doc(db, `artifacts/${appId}/public/data/saidas`, docId);
+                await deleteDoc(docRef);
+                console.log("Documento deletado com sucesso:", docId);
+            } catch (e) {
+                console.error("Erro ao deletar documento:", e);
+            }
+        }
+
+        function updateTotalRecords() {
+            const tableBody = document.getElementById('namesTableBody');
+            document.getElementById('totalRecords').textContent = tableBody.children.length;
+        }
+
+        // Lógica do cronômetro (ajustada para funcionar com o Firestore)
+        function startTimer(button, docId) {
+            const alarm = document.getElementById('alarmSound');
+            
+            if (button.dataset.timerId) {
+                // Pausar/Resetar o cronômetro e atualizar no banco de dados
+                clearInterval(button.dataset.timerId);
+                delete button.dataset.timerId;
+                saveRowData(docId, { running: false, seconds: 0, minutes: 0 });
+                alarm.pause();
+                alarm.currentTime = 0;
+                
+                button.classList.remove('bg-red-500');
+                button.classList.add('bg-blue-500');
+                return;
+            }
+            
+            // Inicia o cronômetro
+            saveRowData(docId, { running: true }); // Apenas salva o estado no banco de dados
+            
+            let seconds = parseInt(button.dataset.seconds || '0', 10);
+            let minutes = parseInt(button.dataset.minutes || '0', 10);
+            
+            button.dataset.timerId = setInterval(() => {
+                seconds++;
+                if (seconds >= 60) {
+                    minutes++;
+                    seconds = 0;
+                }
+                
+                // Salva o tempo no banco de dados a cada segundo
+                saveRowData(docId, { seconds, minutes });
+                
+                if (minutes >= 20) {
+                    if (alarm.paused) {
+                        alarm.play();
+                    }
+                }
+            }, 1000);
+        }
+
+        // Lógica do Modal de Senha
+        const passwordModal = document.getElementById('passwordModal');
+        const passwordInput = document.getElementById('passwordInput');
+        const enterBtn = document.getElementById('enterBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const professorModeToggle = document.getElementById('professorModeToggle');
+        const professorPassword = 'Professor@Jap';
+
+        function showPasswordModal() {
+            passwordModal.classList.add('open');
+            passwordInput.focus();
+        }
+
+        function hidePasswordModal() {
+            passwordModal.classList.remove('open');
+            passwordInput.value = '';
+        }
+
+        function checkPassword() {
+            if (passwordInput.value === professorPassword) {
+                document.body.classList.add('professor-mode');
+                professorModeToggle.textContent = 'Sair do Modo Professor';
+                toggleInputEditability(true);
+                hidePasswordModal();
+            } else {
+                const modalMessage = document.createElement('div');
+                modalMessage.textContent = 'Senha incorreta.';
+                modalMessage.className = 'text-red-500 mt-2';
+                passwordModal.querySelector('.modal-content').appendChild(modalMessage);
+                setTimeout(() => modalMessage.remove(), 2000);
+                passwordInput.value = '';
+                passwordInput.focus();
+            }
+        }
+
+        enterBtn.addEventListener('click', checkPassword);
+        cancelBtn.addEventListener('click', hidePasswordModal);
+        passwordInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                checkPassword();
+            }
+        });
+        passwordModal.addEventListener('click', (e) => {
+            if (e.target.id === 'passwordModal') {
+                hidePasswordModal();
+            }
+        });
+        
+        function toggleInputEditability(enable) {
+            const nameInputs = document.querySelectorAll('input[placeholder="Nome do Aluno"]');
+            const notesInputs = document.querySelectorAll('input[placeholder="Observações (opcional)"]');
+            nameInputs.forEach(input => input.disabled = !enable);
+            notesInputs.forEach(input => input.disabled = !enable);
+        }
+
+        professorModeToggle.addEventListener('click', () => {
+            if (document.body.classList.contains('professor-mode')) {
+                document.body.classList.remove('professor-mode');
+                professorModeToggle.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 9a3 3 0 100-6 3 3 0 000 6zM9.548 10.452a5.986 5.986 0 013.902 0c2.453-.393 4.296-.282 5.347.164.215.09.432.186.649.288l.056.028a.5.5 0 01.353.454v2.793a1 1 0 01-1 1h-16a1 1 0 01-1-1v-2.793a.5.5 0 01.353-.454l.056-.028c1.157-.59 3.018-.76 5.347-.164z" /></svg> Modo Professor';
+                toggleInputEditability(false);
+            } else {
+                showPasswordModal();
+            }
+        });
+
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        const body = document.body;
+        
+        const updateDarkModeButton = () => {
+            if (body.classList.contains('dark-mode')) {
+                darkModeToggle.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a8 8 0 100 16 8 8 0 000-16zM6 10a4 4 0 118 0 4 4 0 01-8 0z" /></svg> Modo Claro';
+            } else {
+                darkModeToggle.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.914A10.004 10.004 0 0014.246 5.86a10.004 10.004 0 00-8.914 9.428A1 1 0 014.167 16h-.142a1 1 0 00-1 1 1 1 0 001 1h.142A10.004 10.004 0 0017.293 13.914z" /></svg> Modo Noturno';
+            }
+        };
+
+        darkModeToggle.addEventListener('click', () => {
+            body.classList.toggle('dark-mode');
+            if (body.classList.contains('dark-mode')) {
+                localStorage.setItem('darkMode', 'enabled');
+            } else {
+                localStorage.setItem('darkMode', 'disabled');
+            }
+            updateDarkModeButton();
+        });
+
+        if (localStorage.getItem('darkMode') === 'enabled') {
+            body.classList.add('dark-mode');
+        }
+        updateDarkModeButton();
+
+        // Inicialização da tabela com 37 linhas se não houver dados no Firestore
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Wait for authentication before checking for data
+            const unsubscribe = onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    unsubscribe(); // Stop listening for auth changes after the first one
+                    const querySnapshot = await getDocs(userCollectionRef);
+                    if (querySnapshot.empty) {
+                        console.log("Banco de dados vazio. Preenchendo com 37 linhas iniciais.");
+                        const initialDocs = Array.from({ length: 37 }, (_, i) => ({
+                            name: '',
+                            notes: '',
+                            minutes: 0,
+                            seconds: 0,
+                            running: false,
+                            rowNumber: i + 1
+                        }));
+                        for (const docData of initialDocs) {
+                            await addDoc(userCollectionRef, docData);
+                        }
+                    }
+                }
+            });
+        });
+
+        async function clearTable() {
+            if (confirm('Tem certeza de que deseja limpar a tabela? Esta ação irá deletar os dados para todos os usuários.')) {
+                try {
+                    const querySnapshot = await getDocs(userCollectionRef);
+                    const batch = writeBatch(db);
+                    querySnapshot.docs.forEach(doc => {
+                        batch.delete(doc.ref);
+                    });
+                    await batch.commit();
+                    console.log("Tabela limpa com sucesso.");
+                } catch (e) {
+                    console.error("Erro ao limpar a tabela:", e);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
