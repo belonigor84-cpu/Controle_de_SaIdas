@@ -9,7 +9,12 @@
         @media print {
             body { margin: 0; padding: 0; }
             .no-print { display: none !important; }
-            .page-break { page-break-after: always; }
+            .table-container { 
+                max-height: none !important; 
+                overflow: visible !important; 
+            }
+            table { width: 100%; }
+            tr { page-break-inside: avoid; }
         }
         .table-container::-webkit-scrollbar { width: 8px; height: 8px; }
         .table-container::-webkit-scrollbar-track { background: #f1f1f1; }
@@ -69,13 +74,13 @@
                     </svg>
                     Imprimir
                 </button>
-                <button id="add-row-btn" onclick="addNewRow()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md professor-control items-center gap-2 transition-colors">
+                <button id="add-row-btn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md professor-control items-center gap-2 transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
                     </svg>
                     Adicionar Linha
                 </button>
-                <button id="clear-table-btn" onclick="clearTable()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md professor-control flex items-center gap-2 transition-colors">
+                <button id="clear-table-btn" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md professor-control flex items-center gap-2 transition-colors">
                     Limpar Tabela
                 </button>
             </div>
@@ -131,7 +136,7 @@
         // Importa as funções necessárias do Firebase
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, query, addDoc, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, query, addDoc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Variáveis globais de ambiente (fornecidas pelo sistema Canvas)
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -146,6 +151,7 @@
         let userId = null;
         const userCollectionRef = collection(db, `artifacts/${appId}/public/data/saidas`);
         const timerIntervals = {}; // Armazena os IDs dos setIntervals para cada cronômetro
+        const professorPassword = 'Professor@Jap';
 
         // Lógica de Autenticação
         onAuthStateChanged(auth, async (user) => {
@@ -183,7 +189,7 @@
                 }
                 document.getElementById('namesTableBody').innerHTML = ''; // Limpa a tabela
 
-                const q = collection(db, `artifacts/${appId}/public/data/saidas`);
+                const q = query(userCollectionRef);
                 
                 // onSnapshot cria um "ouvinte" que é acionado sempre que a coleção é alterada
                 onSnapshot(q, (querySnapshot) => {
@@ -192,7 +198,6 @@
                         rowsData[doc.id] = { id: doc.id, ...doc.data() };
                     });
 
-                    // Atualiza a tabela com os novos dados
                     renderTable(rowsData);
                     updateTotalRecords();
                 });
@@ -207,11 +212,9 @@
             const currentIds = new Set(Object.keys(data));
             const existingRows = Array.from(tableBody.children);
             
-            // Remove linhas que não existem mais no banco de dados
             existingRows.forEach(row => {
                 const docId = row.dataset.docId;
                 if (!currentIds.has(docId)) {
-                    // Limpa o cronômetro antes de remover a linha
                     const timerButton = row.querySelector('.timer-button');
                     if (timerButton && timerButton.dataset.timerId) {
                         clearInterval(timerButton.dataset.timerId);
@@ -220,7 +223,6 @@
                 }
             });
 
-            // Adiciona ou atualiza as linhas
             const sortedData = Object.values(data).sort((a, b) => a.rowNumber - b.rowNumber);
             sortedData.forEach(rowData => {
                 let row = document.querySelector(`[data-doc-id="${rowData.id}"]`);
@@ -230,6 +232,11 @@
                 }
                 updateRow(row, rowData);
             });
+
+            // ATUALIZAÇÃO: Garante que os campos de texto são ativados no modo professor
+            if (document.body.classList.contains('professor-mode')) {
+                toggleInputEditability(true);
+            }
         }
         
         // Cria uma nova linha HTML com os dados
@@ -249,7 +256,7 @@
             nameInput.className = 'w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500';
             nameInput.placeholder = 'Nome do Aluno';
             nameInput.value = rowData.name || '';
-            nameInput.disabled = true; // Desabilitado por padrão
+            nameInput.disabled = true;
             nameCell.appendChild(nameInput);
             nameInput.addEventListener('input', (e) => saveRowData(rowData.id, { name: e.target.value }));
 
@@ -257,7 +264,8 @@
             timerCell.className = 'px-4 py-3 whitespace-nowrap border-r border-gray-300 text-center';
             const timerButton = document.createElement('button');
             timerButton.className = 'bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm timer-button';
-            timerButton.onclick = function() { startTimer(this, rowData.id); };
+            // FIX: Pass the initial minutes and seconds to ensure they are not undefined
+            timerButton.onclick = function() { startTimer(this, rowData.id, rowData.minutes, rowData.seconds); };
             timerCell.appendChild(timerButton);
             
             const notesCell = document.createElement('td');
@@ -267,7 +275,7 @@
             notesInput.className = 'w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500';
             notesInput.placeholder = 'Observações (opcional)';
             notesInput.value = rowData.notes || '';
-            notesInput.disabled = true; // Desabilitado por padrão
+            notesInput.disabled = true;
             notesCell.appendChild(notesInput);
             notesInput.addEventListener('input', (e) => saveRowData(rowData.id, { notes: e.target.value }));
             
@@ -288,7 +296,6 @@
             return row;
         }
 
-        // Atualiza uma linha HTML existente com os novos dados
         function updateRow(row, rowData) {
             const timerButton = row.querySelector('.timer-button');
             const nameInput = row.querySelector('input[placeholder="Nome do Aluno"]');
@@ -301,94 +308,98 @@
                 notesInput.value = rowData.notes || '';
             }
             
-            // Lógica para o cronômetro
             const newFormattedTime = 
                 (rowData.minutes < 10 ? '0' + rowData.minutes : rowData.minutes) + ':' + 
                 (rowData.seconds < 10 ? '0' + rowData.seconds : rowData.seconds);
             
             timerButton.textContent = newFormattedTime;
             
-            if (rowData.running && !timerButton.dataset.timerId) {
-                // Inicia o cronômetro localmente se o banco de dados disser que está rodando
-                timerButton.dataset.seconds = rowData.seconds;
-                timerButton.dataset.minutes = rowData.minutes;
-                timerButton.dataset.running = 'false'; // Evita o loop de startTimer
-                startTimer(timerButton, rowData.id);
-            } else if (!rowData.running && timerButton.dataset.timerId) {
-                // Pausa o cronômetro localmente se o banco de dados disser que está parado
-                clearInterval(timerButton.dataset.timerId);
-                delete timerButton.dataset.timerId;
+            if (rowData.running && !timerIntervals[rowData.id]) {
+                startTimer(timerButton, rowData.id, rowData.minutes, rowData.seconds);
+            } else if (!rowData.running && timerIntervals[rowData.id]) {
+                clearInterval(timerIntervals[rowData.id]);
+                delete timerIntervals[rowData.id];
+                const alarm = document.getElementById('alarmSound');
+                alarm.pause();
+                alarm.currentTime = 0;
                 timerButton.classList.remove('bg-red-500');
                 timerButton.classList.add('bg-blue-500');
             }
         }
         
-        // Função para salvar dados no Firestore
         async function saveRowData(docId, data) {
             try {
-                await setDoc(doc(db, `artifacts/${appId}/public/data/saidas`, docId), data, { merge: true });
+                // Ensure data fields are not undefined before saving
+                const newData = {};
+                for (const key in data) {
+                    if (data[key] !== undefined) {
+                        newData[key] = data[key];
+                    }
+                }
+                if (Object.keys(newData).length > 0) {
+                    await setDoc(doc(db, `artifacts/${appId}/public/data/saidas`, docId), newData, { merge: true });
+                }
             } catch (e) {
                 console.error("Erro ao salvar dados no Firestore:", e);
             }
         }
 
-        // Adiciona uma nova linha com um documento no Firestore
         async function addNewRow() {
             try {
-                const newDocRef = await addDoc(userCollectionRef, {
+                const querySnapshot = await getDocs(userCollectionRef);
+                await addDoc(userCollectionRef, {
                     name: '',
                     notes: '',
                     minutes: 0,
                     seconds: 0,
                     running: false,
-                    rowNumber: (await getDocs(userCollectionRef)).size + 1
+                    rowNumber: querySnapshot.size + 1
                 });
-                console.log("Novo documento adicionado com ID:", newDocRef.id);
             } catch (e) {
                 console.error("Erro ao adicionar nova linha:", e);
             }
         }
         
-        // Deleta uma linha do Firestore
         async function deleteRow(docId) {
             try {
-                const docRef = doc(db, `artifacts/${appId}/public/data/saidas`, docId);
-                await deleteDoc(docRef);
-                console.log("Documento deletado com sucesso:", docId);
+                await deleteDoc(doc(db, `artifacts/${appId}/public/data/saidas`, docId));
             } catch (e) {
                 console.error("Erro ao deletar documento:", e);
             }
         }
 
         function updateTotalRecords() {
-            const tableBody = document.getElementById('namesTableBody');
-            document.getElementById('totalRecords').textContent = tableBody.children.length;
+            document.getElementById('totalRecords').textContent = document.getElementById('namesTableBody').children.length;
         }
 
-        // Lógica do cronômetro (ajustada para funcionar com o Firestore)
-        function startTimer(button, docId) {
-            const alarm = document.getElementById('alarmSound');
-            
-            if (button.dataset.timerId) {
-                // Pausar/Resetar o cronômetro e atualizar no banco de dados
-                clearInterval(button.dataset.timerId);
-                delete button.dataset.timerId;
-                saveRowData(docId, { running: false, seconds: 0, minutes: 0 });
-                alarm.pause();
-                alarm.currentTime = 0;
-                
-                button.classList.remove('bg-red-500');
-                button.classList.add('bg-blue-500');
+        function startTimer(button, docId, initialMinutes, initialSeconds) {
+            // Verifica se o cronômetro está a correr
+            if (timerIntervals[docId]) {
+                // APENAS permite parar o cronômetro se o modo professor estiver ativo
+                if (document.body.classList.contains('professor-mode')) {
+                    const alarm = document.getElementById('alarmSound');
+                    alarm.pause();
+                    alarm.currentTime = 0;
+                    clearInterval(timerIntervals[docId]);
+                    delete timerIntervals[docId];
+                    // Salva o estado de corrida como falso e reseta o tempo
+                    saveRowData(docId, { running: false, seconds: 0, minutes: 0 });
+                    button.classList.remove('bg-red-500');
+                    button.classList.add('bg-blue-500');
+                } else {
+                    // Se não estiver no modo professor, o clique não faz nada
+                    console.log("Ação negada: Parar o cronômetro só é permitido no modo Professor.");
+                }
                 return;
             }
             
-            // Inicia o cronômetro
-            saveRowData(docId, { running: true }); // Apenas salva o estado no banco de dados
+            // Inicia o cronômetro (qualquer utilizador pode iniciar)
+            saveRowData(docId, { running: true });
             
-            let seconds = parseInt(button.dataset.seconds || '0', 10);
-            let minutes = parseInt(button.dataset.minutes || '0', 10);
+            let seconds = initialSeconds;
+            let minutes = initialMinutes;
             
-            button.dataset.timerId = setInterval(() => {
+            timerIntervals[docId] = setInterval(() => {
                 seconds++;
                 if (seconds >= 60) {
                     minutes++;
@@ -399,11 +410,14 @@
                 saveRowData(docId, { seconds, minutes });
                 
                 if (minutes >= 20) {
+                    const alarm = document.getElementById('alarmSound');
                     if (alarm.paused) {
                         alarm.play();
                     }
                 }
             }, 1000);
+            button.classList.remove('bg-blue-500');
+            button.classList.add('bg-red-500');
         }
 
         // Lógica do Modal de Senha
@@ -412,7 +426,6 @@
         const enterBtn = document.getElementById('enterBtn');
         const cancelBtn = document.getElementById('cancelBtn');
         const professorModeToggle = document.getElementById('professorModeToggle');
-        const professorPassword = 'Professor@Jap';
 
         function showPasswordModal() {
             passwordModal.classList.add('open');
@@ -499,43 +512,86 @@
 
         // Inicialização da tabela com 37 linhas se não houver dados no Firestore
         document.addEventListener('DOMContentLoaded', async function() {
-            // Wait for authentication before checking for data
-            const unsubscribe = onAuthStateChanged(auth, async (user) => {
-                if (user) {
-                    unsubscribe(); // Stop listening for auth changes after the first one
-                    const querySnapshot = await getDocs(userCollectionRef);
-                    if (querySnapshot.empty) {
-                        console.log("Banco de dados vazio. Preenchendo com 37 linhas iniciais.");
-                        const initialDocs = Array.from({ length: 37 }, (_, i) => ({
-                            name: '',
-                            notes: '',
-                            minutes: 0,
-                            seconds: 0,
-                            running: false,
-                            rowNumber: i + 1
-                        }));
-                        for (const docData of initialDocs) {
-                            await addDoc(userCollectionRef, docData);
-                        }
+            const tableBody = document.getElementById('namesTableBody');
+            for (let i = 1; i <= 37; i++) {
+                const rowData = {
+                    id: `local-${i}`,
+                    name: '',
+                    notes: '',
+                    minutes: 0,
+                    seconds: 0,
+                    running: false,
+                    rowNumber: i
+                };
+                const row = createRow(rowData);
+                tableBody.appendChild(row);
+                updateRow(row, rowData);
+            }
+            updateTotalRecords();
+        });
+
+        document.getElementById('clear-table-btn').addEventListener('click', async () => {
+            // Use um modal de confirmação personalizado em vez de window.confirm
+            showCustomConfirmation('Tem certeza de que deseja limpar a tabela? Esta ação irá deletar os dados para todos os usuários.', async (confirmed) => {
+                if (confirmed) {
+                    try {
+                        const querySnapshot = await getDocs(userCollectionRef);
+                        const batch = writeBatch(db);
+                        querySnapshot.docs.forEach(doc => {
+                            batch.delete(doc.ref);
+                        });
+                        await batch.commit();
+                        console.log("Tabela limpa com sucesso.");
+                    } catch (e) {
+                        console.error("Erro ao limpar a tabela:", e);
                     }
                 }
             });
         });
 
-        async function clearTable() {
-            if (confirm('Tem certeza de que deseja limpar a tabela? Esta ação irá deletar os dados para todos os usuários.')) {
-                try {
-                    const querySnapshot = await getDocs(userCollectionRef);
-                    const batch = writeBatch(db);
-                    querySnapshot.docs.forEach(doc => {
-                        batch.delete(doc.ref);
-                    });
-                    await batch.commit();
-                    console.log("Tabela limpa com sucesso.");
-                } catch (e) {
-                    console.error("Erro ao limpar a tabela:", e);
+        document.getElementById('add-row-btn').addEventListener('click', addNewRow);
+        
+        // Modal de confirmação personalizado
+        function showCustomConfirmation(message, callback) {
+            const existingModal = document.getElementById('customConfirmationModal');
+            if (existingModal) existingModal.remove();
+
+            const modalHtml = `
+                <div id="customConfirmationModal" class="modal-overlay open">
+                    <div class="modal-content text-center">
+                        <h3 class="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-200">Confirmação</h3>
+                        <p class="text-gray-600 dark:text-gray-400 mb-6">${message}</p>
+                        <div class="flex justify-end gap-2">
+                            <button id="confirmCancelBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md transition-colors">
+                                Cancelar
+                            </button>
+                            <button id="confirmOkBtn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md transition-colors">
+                                OK
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+            const modal = document.getElementById('customConfirmationModal');
+            const okBtn = document.getElementById('confirmOkBtn');
+            const cancelBtn = document.getElementById('confirmCancelBtn');
+
+            okBtn.addEventListener('click', () => {
+                callback(true);
+                modal.remove();
+            });
+            cancelBtn.addEventListener('click', () => {
+                callback(false);
+                modal.remove();
+            });
+            modal.addEventListener('click', (e) => {
+                if (e.target.id === 'customConfirmationModal') {
+                    callback(false);
+                    modal.remove();
                 }
-            }
+            });
         }
     </script>
 </body>
